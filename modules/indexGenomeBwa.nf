@@ -2,7 +2,7 @@
  * Define the indexGenome process that creates a BWA index
  * given the genome fasta file
  */
-process indexGenome {
+process indexGenomeBwa {
 
     if (params.platform == 'local') {
         label 'process_low'
@@ -19,18 +19,15 @@ process indexGenome {
     path genomeFasta
 
     output:
-    tuple path(genomeFasta), path("${genomeFasta}.*")
+    tuple path(genomeFasta), path("${genomeFasta}.{bwt,pac,ann,amb,sa}")
 
     script:
     """
     echo "Running Index Genome"
 
-    # Generate samtools faidx
-    samtools faidx "${genomeFasta}"
-
-    # Generate Fasta dict
-    picard CreateSequenceDictionary R="${genomeFasta}" O="${genomeFasta}.dict"
-
+    # Generate BWA index
+    bwa index "${genomeFasta}"
+    
     echo "Genome Indexing complete."
     """
 }

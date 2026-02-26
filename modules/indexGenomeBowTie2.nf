@@ -2,16 +2,15 @@
  * Define the indexGenome process that creates a BWA index
  * given the genome fasta file
  */
-process indexGenome {
-
+process indexGenomeBowTie2 {
+    
+    container 'bowtie2:2.5.4'
     if (params.platform == 'local') {
         label 'process_low'
     } else if (params.platform == 'cloud') {
         label 'process_medium'
     }
-    container 'variantvalidator/indexgenome:1.1.0'
-
-
+    
     // Publish indexed files to the specified directory
     publishDir("$params.outdir/GENOME_IDX", mode: "copy")
 
@@ -19,17 +18,15 @@ process indexGenome {
     path genomeFasta
 
     output:
-    tuple path(genomeFasta), path("${genomeFasta}.*")
+    tuple path(genomeFasta), path("*.bt2")
 
     script:
     """
     echo "Running Index Genome"
+    BASENAME=\$(basename "${genomeFasta}" .fasta)
 
-    # Generate samtools faidx
-    samtools faidx "${genomeFasta}"
-
-    # Generate Fasta dict
-    picard CreateSequenceDictionary R="${genomeFasta}" O="${genomeFasta}.dict"
+    # Generate BWA index
+    bowtie2-build --threads 8 "${genomeFasta}" \$BASENAME
 
     echo "Genome Indexing complete."
     """

@@ -47,13 +47,18 @@
                 },
                 "aligner": {
                     "type": "string",
-                    "description": "Aligner to use (bwa-mem or bwa-aln)",
+                    "description": "Aligner to use (bwa-mem or bwa-aln or bowtie2)",
                     "default": "bwa-mem",
-                    "enum": ["bwa-mem", "bwa-aln"]
+                    "enum": ["bwa-mem", "bwa-aln", "bowtie2"]
                 },
                 "fastqc": {
                     "type": "boolean",
                     "description": "Flag to indicate if FASTQC should be performed",
+                    "default": false
+                },
+                "fastp": {
+                    "type": "boolean",
+                    "description": "Flag to indicate if FASTP should be performed",
                     "default": false
                 },
                 "index_genome": {

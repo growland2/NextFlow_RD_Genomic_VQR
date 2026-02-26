@@ -14,6 +14,7 @@ log.info """\
     qsr truth vcfs  : ${params.qsrVcfs}
     output directory: ${params.outdir}
     fastqc          : ${params.fastqc}
+    fastp           : ${params.fastp}
     aligner         : ${params.aligner}
     variant caller  : ${params.variant_caller}
     bqsr            : ${params.bqsr}
@@ -26,9 +27,20 @@ log.info """\
 // Conditionally include modules
 if (params.index_genome) {
     include { indexGenome } from './modules/indexGenome'
+    if (params.aligner.contains('bwa')) {
+        include { indexGenomeBwa } from './modules/indexGenomeBwa'
+    } else if (params.aligner.contains('bowtie2')) {
+        include { indexGenomeBowTie2 } from './modules/indexGenomeBowTie2'
+    } else {
+        error "Unsupported aligner for genome indexing: ${params.aligner}. Please specify 'bwa-mem', 'bwa-aln', or 'bowtie2'."
+    }
 }
+
 if (params.fastqc) {
     include { FASTQC } from './modules/FASTQC'
+}
+if (params.fastp) {
+    include { FASTP } from './modules/FASTP'
 }
 include { sortBam } from './modules/sortBam'
 include { markDuplicates } from './modules/markDuplicates'
@@ -50,8 +62,10 @@ if (params.aligner == 'bwa-mem') {
     include { alignReadsBwaMem } from './modules/alignReadsBwaMem'
 } else if (params.aligner == 'bwa-aln') {
     include { alignReadsBwaAln } from './modules/alignReadsBwaAln'
+} else if (params.aligner == 'bowtie2') {
+    include { alignReadsBowTie2 } from './modules/alignReadsBowTie2' 
 } else {
-    error "Unsupported aligner: ${params.aligner}. Please specify 'bwa-mem' or 'bwa-aln'."
+    error "Unsupported aligner: ${params.aligner}. Please specify 'bwa-mem', 'bwa-aln' or 'bowtie2'."
 }
 if (params.variant_caller == 'haplotype-caller') {
     include { haplotypeCaller } from './modules/haplotypeCaller'
@@ -68,11 +82,19 @@ workflow {
 
     // User decides to index genome or not
     if (params.index_genome){
-        // Flatten as is of format [fasta, [rest of files..]]
-        indexed_genome_ch = indexGenome(params.genome_file).flatten()
+        indexed_genome_ch = indexGenome(params.genome_file).flatten().unique()
+        if (params.aligner.contains('bwa')) {
+            bwa_index_ch = indexGenomeBwa(params.genome_file).flatten().unique()
+        } else if (params.aligner == 'bowtie2') {
+            bowtie_index_ch = indexGenomeBowTie2(params.genome_file).flatten().unique()
+        } else {
+            error "Unsupported aligner for genome indexing: ${params.aligner}. Please specify 'bwa-mem', 'bwa-aln', or 'bowtie2'."
+        }
     }
     else {
-        indexed_genome_ch = Channel.fromPath(params.genome_index_files)
+        indexed_genome_ch = Channel.fromPath(params.genome_index_files).unique()
+        bwa_index_ch = indexed_genome_ch
+        bowtie_index_ch = indexed_genome_ch
     }
 
     // Create qsrc_vcf_ch channel
@@ -91,18 +113,24 @@ workflow {
                 error "Unexpected row format in samplesheet: $row"
             }
         }
-    read_pairs_ch.view()
 
     // Run FASTQC on read pairs
     if (params.fastqc) {
         FASTQC(read_pairs_ch)
     }
 
+    if (params.fastp) {
+        FASTP(read_pairs_ch)
+        read_pairs_ch = FASTP.out.processed_reads
+    }
+
     // Align reads to the indexed genome
     if (params.aligner == 'bwa-mem') {
-        align_ch = alignReadsBwaMem(read_pairs_ch, indexed_genome_ch.collect())
+        align_ch = alignReadsBwaMem(read_pairs_ch, bwa_index_ch.collect())
     } else if (params.aligner == 'bwa-aln') {
-        align_ch = alignReadsBwaAln(read_pairs_ch, indexed_genome_ch.collect())
+        align_ch = alignReadsBwaAln(read_pairs_ch, bwa_index_ch.collect())
+    } else if (params.aligner == 'bowtie2') {
+        align_ch = alignReadsBowTie2(read_pairs_ch, bowtie_index_ch.collect())
     }
 
     // Sort BAM files
@@ -251,6 +279,26 @@ workflow FASTQC_only {
 
     if (params.fastqc) {
         FASTQC(read_pairs_ch)
+    }
+}
+
+workflow FASTP_only {
+    // Set channel to gather read_pairs
+    read_pairs_ch = Channel
+        .fromPath(params.samplesheet)
+        .splitCsv(sep: '\t')
+        .map { row ->
+            if (row.size() == 4) {
+                tuple(row[0], [row[1], row[2]])
+            } else if (row.size() == 3) {
+                tuple(row[0], [row[1]])
+            } else {
+                error "Unexpected row format in samplesheet: $row"
+            }
+        }
+
+    if (params.fastp) {
+        FASTP(read_pairs_ch)
     }
 }
 
