@@ -5,12 +5,15 @@
 process indexGenomeBowTie2 {
     
     container 'growland1/bowtie2:2.5.4'
+
     if (params.platform == 'local') {
-        label 'process_low'
-    } else if (params.platform == 'cloud') {
         label 'process_medium'
+    } else if (params.platform == 'cloud') {
+        label 'process_high'
     }
     
+    tag "$sample_id"
+
     // Publish indexed files to the specified directory
     publishDir("$params.outdir/GENOME_IDX", mode: "copy")
 
@@ -23,10 +26,9 @@ process indexGenomeBowTie2 {
     script:
     """
     echo "Running Index Genome"
-    BASENAME=\$(basename "${genomeFasta}" .fasta)
 
     # Generate BWA index
-    bowtie2-build --threads 8 "${genomeFasta}" \$BASENAME
+    bowtie2-build --threads ${task.cpus} "${genomeFasta}" ${genomeFasta.baseName}
 
     echo "Genome Indexing complete."
     """
