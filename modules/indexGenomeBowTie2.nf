@@ -4,7 +4,7 @@
  */
 process indexGenomeBowTie2 {
     
-    container 'bowtie2:2.5.4'
+    container 'growland1/bowtie2:2.5.4'
     if (params.platform == 'local') {
         label 'process_low'
     } else if (params.platform == 'cloud') {

@@ -8,7 +8,7 @@ process alignReadsBowTie2 {
     } else if (params.platform == 'cloud') {
         label 'process_high'
     }
-    container 'bowtie2:2.5.4'
+    container 'growland1/bowtie2:2.5.4'
 
     tag "$sample_id"
     cpus 8
